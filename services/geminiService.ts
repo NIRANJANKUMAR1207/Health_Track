@@ -1,33 +1,71 @@
-import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Chat } from "@google/genai";
 
-// TODO: For production, store API keys securely (e.g., .env, secret manager). Never commit real keys in public repos.
-const apiKey = 'AIzaSyB1AqaSjbeetDRruoKygli8AmAbfs32Mo8';
+// ✅ Load API key safely
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
+  throw new Error("API key is missing. Check your .env.local file.");
+}
+
+console.log("API KEY:", apiKey);
+
+// ✅ Initialize AI
 const ai = new GoogleGenAI({ apiKey });
 
+// ✅ Create chat instance
 export const createHealthChat = (): Chat => {
   return ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: "gemini-2.5-flash",
     config: {
       systemInstruction: `You are a Smart Health Assistant. 
-      Your goal is to provide general wellness advice, explain medical terms simply, and offer lifestyle tips.
-      
-      CRITICAL RULES:
-      1. If the user asks for a diagnosis or specific medication, strictly state: "I am an AI assistant, not a doctor. Please consult a healthcare professional for diagnosis and treatment."
-      2. Be empathetic, professional, and encouraging.
-      3. You support two languages: English and Tamil. If the user asks in Tamil or requests Tamil, reply in Tamil.
-      4. Keep answers concise (under 150 words) unless asked for a detailed report.
-      `,
+      Provide general wellness advice only.
+      If asked for diagnosis or medication, say:
+      "I am an AI assistant, not a doctor. Please consult a healthcare professional."
+      Keep answers short and helpful.`,
     },
   });
 };
 
-export const generateHealthReport = async (data: any): Promise<string> => {
+// ✅ Send message helper (IMPORTANT)
+export const sendMessageToChat = async (
+  chat: Chat,
+  message: string
+): Promise<string> => {
   try {
-    const response: GenerateContentResponse = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Analyze this health data and provide a brief summary of risks and 3 recommendations: ${JSON.stringify(data)}`,
+    const response = await chat.sendMessage({
+      message: message,
     });
-    return response.text || "Unable to generate report.";
+
+    // ✅ Correct way to read response
+    return response.text ?? "No response from AI.";
+  } catch (error) {
+    console.error("Chat error:", error);
+    return "I'm having trouble connecting right now. Please try again.";
+  }
+};
+
+// ✅ Generate report
+export const generateHealthReport = async (
+  data: any
+): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `Analyze this health data and give 3 recommendations:\n${JSON.stringify(
+                data
+              )}`,
+            },
+          ],
+        },
+      ],
+    });
+
+    return response.text ?? "Unable to generate report.";
   } catch (error) {
     console.error("Error generating report:", error);
     return "Error generating report. Please try again later.";
